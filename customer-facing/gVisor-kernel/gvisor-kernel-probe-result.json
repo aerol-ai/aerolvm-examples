@@ -1,0 +1,52 @@
+{
+  "stdout": "{\n  \"runtime\": \"gvisor\",\n  \"results\": [\n    {\n      \"check\": \"capabilities\",\n      \"command\": \"sh -lc 'grep ^CapEff: /proc/self/status'\",\n      \"exitCode\": 0,\n      \"stdout\": \"CapEff:\\t00000000a80405fb\",\n      \"stderr\": \"\"\n    },\n    {\n      \"check\": \"kernel_version\",\n      \"command\": \"uname -r\",\n      \"exitCode\": 0,\n      \"stdout\": \"4.19.0-gvisor\",\n      \"stderr\": \"\"\n    },\n    {\n      \"check\": \"kernel_build\",\n      \"command\": \"cat /proc/version\",\n      \"exitCode\": 0,\n      \"stdout\": \"Linux version 4.19.0-gvisor #1 SMP Sun Jan 10 15:06:54 PST 2016\",\n      \"stderr\": \"\"\n    },\n    {\n      \"check\": \"physical_memory_buddy\",\n      \"command\": \"cat /proc/buddyinfo\",\n      \"exitCode\": 1,\n      \"stdout\": \"\",\n      \"stderr\": \"cat: /proc/buddyinfo: No such file or directory\"\n    },\n    {\n      \"check\": \"hardware_io_regions\",\n      \"command\": \"cat /proc/iomem\",\n      \"exitCode\": 1,\n      \"stdout\": \"\",\n      \"stderr\": \"cat: /proc/iomem: No such file or directory\"\n    },\n    {\n      \"check\": \"net_stats\",\n      \"command\": \"cat /proc/net/sockstat\",\n      \"exitCode\": 1,\n      \"stdout\": \"\",\n      \"stderr\": \"cat: /proc/net/sockstat: No such file or directory\"\n    }\n  ]\n}\n",
+  "stderr": "",
+  "exitCode": 0,
+  "report": {
+    "runtime": "gvisor",
+    "results": [
+      {
+        "check": "capabilities",
+        "command": "sh -lc 'grep ^CapEff: /proc/self/status'",
+        "exitCode": 0,
+        "stdout": "CapEff:\t00000000a80405fb",
+        "stderr": ""
+      },
+      {
+        "check": "kernel_version",
+        "command": "uname -r",
+        "exitCode": 0,
+        "stdout": "4.19.0-gvisor",
+        "stderr": ""
+      },
+      {
+        "check": "kernel_build",
+        "command": "cat /proc/version",
+        "exitCode": 0,
+        "stdout": "Linux version 4.19.0-gvisor #1 SMP Sun Jan 10 15:06:54 PST 2016",
+        "stderr": ""
+      },
+      {
+        "check": "physical_memory_buddy",
+        "command": "cat /proc/buddyinfo",
+        "exitCode": 1,
+        "stdout": "",
+        "stderr": "cat: /proc/buddyinfo: No such file or directory"
+      },
+      {
+        "check": "hardware_io_regions",
+        "command": "cat /proc/iomem",
+        "exitCode": 1,
+        "stdout": "",
+        "stderr": "cat: /proc/iomem: No such file or directory"
+      },
+      {
+        "check": "net_stats",
+        "command": "cat /proc/net/sockstat",
+        "exitCode": 1,
+        "stdout": "",
+        "stderr": "cat: /proc/net/sockstat: No such file or directory"
+      }
+    ]
+  }
+}

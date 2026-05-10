@@ -1,0 +1,21 @@
+{
+  "name": "ai-app-hosting",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "docker": "node --loader ts-node/esm dockerRuntime.ts",
+    "gvisor": "node --loader ts-node/esm gVisorRuntime.ts"
+  },
+  "dependencies": {
+    "@aerol-ai/aerolvm-sdk": "^0.1.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "stdout": "{\n  \"runtime\": \"docker\",\n  \"results\": [\n    {\n      \"check\": \"capabilities\",\n      \"command\": \"sh -lc 'grep ^CapEff: /proc/self/status'\",\n      \"exitCode\": 0,\n      \"stdout\": \"CapEff:\\t00000000a80425fb\",\n      \"stderr\": \"\"\n    },\n    {\n      \"check\": \"kernel_version\",\n      \"command\": \"uname -r\",\n      \"exitCode\": 0,\n      \"stdout\": \"7.0.0-1004-aws\",\n      \"stderr\": \"\"\n    },\n    {\n      \"check\": \"kernel_build\",\n      \"command\": \"cat /proc/version\",\n      \"exitCode\": 0,\n      \"stdout\": \"Linux version 7.0.0-1004-aws (buildd@lcy02-amd64-076) (x86_64-linux-gnu-gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, GNU ld (GNU Binutils for Ubuntu) 2.46) #4-Ubuntu SMP PREEMPT Mon Apr 13 13:14:24 UTC 2026\",\n      \"stderr\": \"\"\n    },\n    {\n      \"check\": \"physical_memory_buddy\",\n      \"command\": \"cat /proc/buddyinfo\",\n      \"exitCode\": 0,\n      \"stdout\": \"Node 0, zone      DMA     48     35     23     18     20      8      1      1      0      0      0 \\nNode 0, zone    DMA32    371    760   1000    230     22      3      0      1      5      1      0\",\n      \"stderr\": \"\"\n    },\n    {\n      \"check\": \"hardware_io_regions\",\n      \"command\": \"cat /proc/iomem\",\n      \"exitCode\": 0,\n      \"stdout\": \"00000000-00000000 : Reserved\\n00000000-00000000 : System RAM\\n00000000-00000000 : PCI Bus 0000:00\\n00000000-00000000 : System ROM\\n00000000-00000000 : System RAM\\n  00000000-00000000 : Kernel code\\n  00000000-00000000 : Kernel rodata\\n  00000000-00000000 : Kernel data\\n  00000000-00000000 : Kernel bss\\n00000000-00000000 : Reserved\\n00000000-00000000 : System RAM\\n00000000-00000000 : Reserved\\n00000000-00000000 : ACPI Tables\\n00000000-00000000 : ACPI Non-volatile Storage\\n00000000-00000000 : System RAM\\n00000000-00000000 : Reserved\\n00000000-00000000 : RAM buffer\\n00000000-00000000 : PCI Bus 0000:00\\n  00000000-00000000 : 0000:00:03.0\\n    00000000-00000000 : BOOTFB\\n      00000000-00000000 : simpledrm\\n  00000000-00000000 : 0000:00:05.0\\n    00000000-00000000 : ena\\n  00000000-00000000 : 0000:00:04.0\\n    00000000-00000000 : nvme\\n00000000-00000000 : IOAPIC 0\\n00000000-00000000 : HPET 0\\n00000000-00000000 : AMZNC10C:00\\n00000000-00000000 : PCI Bus 0000:00\",\n      \"stderr\": \"\"\n    },\n    {\n      \"check\": \"net_stats\",\n      \"command\": \"cat /proc/net/sockstat\",\n      \"exitCode\": 0,\n      \"stdout\": \"sockets: used 4\\nTCP: inuse 0 orphan 0 tw 0 alloc 33 mem 249\\nUDP: inuse 0 mem 0\\nUDPLITE: inuse 0\\nRAW: inuse 0\\nFRAG: inuse 0 memory 0\",\n      \"stderr\": \"\"\n    }\n  ]\n}\n",
+  "stderr": "",
+  "exitCode": 0,
+  "report": {
+    "runtime": "docker",
+    "results": [
+      {
+        "check": "capabilities",
+        "command": "sh -lc 'grep ^CapEff: /proc/self/status'",
+        "exitCode": 0,
+        "stdout": "CapEff:\t00000000a80425fb",
+        "stderr": ""
+      },
+      {
+        "check": "kernel_version",
+        "command": "uname -r",
+        "exitCode": 0,
+        "stdout": "7.0.0-1004-aws",
+        "stderr": ""
+      },
+      {
+        "check": "kernel_build",
+        "command": "cat /proc/version",
+        "exitCode": 0,
+        "stdout": "Linux version 7.0.0-1004-aws (buildd@lcy02-amd64-076) (x86_64-linux-gnu-gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, GNU ld (GNU Binutils for Ubuntu) 2.46) #4-Ubuntu SMP PREEMPT Mon Apr 13 13:14:24 UTC 2026",
+        "stderr": ""
+      },
+      {
+        "check": "physical_memory_buddy",
+        "command": "cat /proc/buddyinfo",
+        "exitCode": 0,
+        "stdout": "Node 0, zone      DMA     48     35     23     18     20      8      1      1      0      0      0 \nNode 0, zone    DMA32    371    760   1000    230     22      3      0      1      5      1      0",
+        "stderr": ""
+      },
+      {
+        "check": "hardware_io_regions",
+        "command": "cat /proc/iomem",
+        "exitCode": 0,
+        "stdout": "00000000-00000000 : Reserved\n00000000-00000000 : System RAM\n00000000-00000000 : PCI Bus 0000:00\n00000000-00000000 : System ROM\n00000000-00000000 : System RAM\n  00000000-00000000 : Kernel code\n  00000000-00000000 : Kernel rodata\n  00000000-00000000 : Kernel data\n  00000000-00000000 : Kernel bss\n00000000-00000000 : Reserved\n00000000-00000000 : System RAM\n00000000-00000000 : Reserved\n00000000-00000000 : ACPI Tables\n00000000-00000000 : ACPI Non-volatile Storage\n00000000-00000000 : System RAM\n00000000-00000000 : Reserved\n00000000-00000000 : RAM buffer\n00000000-00000000 : PCI Bus 0000:00\n  00000000-00000000 : 0000:00:03.0\n    00000000-00000000 : BOOTFB\n      00000000-00000000 : simpledrm\n  00000000-00000000 : 0000:00:05.0\n    00000000-00000000 : ena\n  00000000-00000000 : 0000:00:04.0\n    00000000-00000000 : nvme\n00000000-00000000 : IOAPIC 0\n00000000-00000000 : HPET 0\n00000000-00000000 : AMZNC10C:00\n00000000-00000000 : PCI Bus 0000:00",
+        "stderr": ""
+      },
+      {
+        "check": "net_stats",
+        "command": "cat /proc/net/sockstat",
+        "exitCode": 0,
+        "stdout": "sockets: used 4\nTCP: inuse 0 orphan 0 tw 0 alloc 33 mem 249\nUDP: inuse 0 mem 0\nUDPLITE: inuse 0\nRAW: inuse 0\nFRAG: inuse 0 memory 0",
+        "stderr": ""
+      }
+    ]
+  }
+}
