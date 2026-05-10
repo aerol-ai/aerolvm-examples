@@ -1,0 +1,124 @@
+import { randomBytes } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
+import { MicroVM } from "@aerol-ai/aerolvm-sdk";
+
+const apiUrl = process.env.SB_API_URL ?? "http://127.0.0.1:21212";
+const patToken = process.env.SB_PAT_TOKEN;
+
+if (!patToken) {
+  throw new Error("Set SB_PAT_TOKEN before running this example.");
+}
+
+const githubToken = process.env.GITHUB_TOKEN;
+const repoURL = githubToken
+  ? `https://${githubToken}@github.com/sumansaurabh/sumansaurabh-portfolio.git`
+  : "https://github.com/sumansaurabh/sumansaurabh-portfolio.git";
+const workDir = "/workspace/site";
+const port = 3000;
+
+function printChunk(chunk: Uint8Array) {
+  const text = Buffer.from(chunk).toString("utf8").trimEnd();
+  if (text) {
+    console.log(text);
+  }
+}
+
+async function runCommand(
+  sandbox: Awaited<ReturnType<MicroVM["create"]>>,
+  command: string,
+  workdir?: string,
+  env?: Record<string, string>,
+) {
+  console.log(`Running: ${command}`);
+
+  const handle = sandbox.execStream({
+    command,
+    workdir,
+    env,
+    onStdout: (chunk) => printChunk(chunk),
+    onStderr: (chunk) => printChunk(chunk),
+    onError: (message) => console.log(message),
+  });
+
+  const exit = await handle.done;
+  console.log(`Command exited with code ${exit.code}${exit.signal ? ` (${exit.signal})` : ""}`);
+
+  if (exit.code !== 0) {
+    throw new Error(`Command failed: ${command}`);
+  }
+}
+
+async function main() {
+  const client = new MicroVM({ apiUrl, patToken });
+  const sandbox = await client.create({
+    image: "node:22-bookworm",
+    cpu: 0.5,
+    memoryMB: 256,
+    diskGB: 4,
+    lifecycle: {
+      destroyIfIdleFor: 45 * 60 * 1_000_000_000,
+    },
+  });
+
+  const previewURL = (await sandbox.exposePort(port)).url;
+  const runtimeEnv = {
+    NODE_ENV: "production",
+    PORT: String(port),
+    PUBLIC_URL: previewURL,
+    SESSION_SECRET: randomBytes(32).toString("hex"),
+  };
+
+  console.log(`Sandbox created: ${sandbox.id}`);
+  console.log(`Preview URL reserved: ${previewURL}`);
+
+  await runCommand(
+    sandbox,
+    "apt-get update && apt-get install -y git ca-certificates",
+    "/",
+  );
+
+  await runCommand(sandbox, "npm install -g bun", "/");
+
+  await runCommand(sandbox, `mkdir -p /workspace && git clone --depth=1 ${repoURL} ${workDir}`, "/");
+
+  await sandbox.uploadFile(
+    `${workDir}/.env`,
+    [
+      "NODE_ENV=production",
+      `PORT=${port}`,
+      `PUBLIC_URL=${previewURL}`,
+      `SESSION_SECRET=${runtimeEnv.SESSION_SECRET}`,
+      "",
+    ].join("\n"),
+  );
+  console.log(`Wrote ${workDir}/.env`);
+
+  await runCommand(sandbox, "bun install", workDir, runtimeEnv);
+
+  await runCommand(sandbox, "bun run build", workDir, runtimeEnv);
+
+  console.log("Starting the app...");
+  const session = await sandbox.createSession({
+    name: "ai-app-hosting",
+    command: "bun run server",
+    workDir: workDir,
+    env: runtimeEnv,
+  });
+
+  const stream = sandbox.attachSession(session.id, {
+    onStdout: (chunk) => printChunk(chunk),
+    onStderr: (chunk) => printChunk(chunk),
+    onError: (message) => console.log(message),
+  });
+  void stream.done.catch(() => {});
+
+  await delay(5_000);
+  stream.close();
+
+  console.log(`App has been hosted on the following URL: ${previewURL}`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
