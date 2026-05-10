@@ -1,0 +1,20 @@
+{
+  "sandboxID": "sb-58e89d828cabe5fe",
+  "postgresSessionID": "ses-60680ae2594e7e8f",
+  "adminSessionID": "ses-a858cc306dc096f2",
+  "adminURL": "https://sb-58e89d828cabe5fe-3000.sandbox.aerol.cloud",
+  "postgresTLSEndpoint": "tls://sb-58e89d828cabe5fe-5432.sandbox.aerol.cloud:443",
+  "tunnelDSN": "postgresql://appuser:password@127.0.0.1:15432/appdb?sslmode=disable",
+  "tunnelSetup": {
+    "socat": "socat TCP-LISTEN:15432,reuseaddr,fork OPENSSL:sb-58e89d828cabe5fe-5432.sandbox.aerol.cloud:443,cafile=/etc/ssl/certs/ca-certificates.crt",
+    "stunnel": "[postgres]\nclient  = yes\naccept  = 127.0.0.1:15432\nconnect = sb-58e89d828cabe5fe-5432.sandbox.aerol.cloud:443\nsni     = sb-58e89d828cabe5fe-5432.sandbox.aerol.cloud"
+  },
+  "database": {
+    "hostInsideSandbox": "127.0.0.1",
+    "port": 5432,
+    "name": "appdb",
+    "userEnv": "POSTGRES_USER",
+    "passwordEnv": "POSTGRES_PASSWORD"
+  },
+  "note": "TLS is terminated by caddy-l4 using the wildcard domain cert. Connect via a local TLS tunnel (socat/stunnel) with sslmode=disable."
+}
