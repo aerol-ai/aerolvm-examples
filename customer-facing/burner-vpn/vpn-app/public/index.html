@@ -61,6 +61,21 @@
             border: 1px solid var(--border);
         }
 
+        .cred-item.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .steps {
+            margin: 1rem 0 0;
+            padding-left: 1.2rem;
+            color: var(--text-main);
+            line-height: 1.6;
+        }
+
+        .steps li + li {
+            margin-top: 0.4rem;
+        }
+
         .cred-label {
             color: var(--text-muted);
             font-size: 0.85rem;
@@ -71,8 +86,9 @@
 
         .cred-value {
             font-family: var(--font-mono);
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             color: var(--accent);
+            word-break: break-all;
         }
 
         .code-block {
@@ -81,13 +97,41 @@
             border-radius: 6px;
             border: 1px solid var(--border);
             font-family: var(--font-mono);
+            font-size: 0.9rem;
             color: var(--text-main);
             overflow-x: auto;
             margin-top: 1rem;
         }
 
+        .note {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
         .stats-panel {
             text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .stat-card {
+            background: #161822;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
         }
 
         .stat-number {
@@ -95,6 +139,10 @@
             font-weight: bold;
             color: var(--accent);
             font-family: var(--font-mono);
+        }
+
+        .stat-number.small {
+            font-size: 2rem;
         }
 
         .pulse {
@@ -113,25 +161,27 @@
             70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
             100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
+
+        h3 { margin-top: 2rem; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1><span class="pulse"></span>Burner VPN / Proxy</h1>
-            <p style="color: var(--text-muted)">Your isolated, ephemeral proxy server is active.</p>
+            <h1><span class="pulse"></span>Burner Tab Relay</h1>
+            <p style="color: var(--text-muted)">Reuse your current Chrome session.<br>This relay intercepts tab traffic in a Chrome extension and forwards it through the sandbox over WebSocket.</p>
         </div>
 
         <div class="panel">
-            <h2>Connection Details</h2>
+            <h2>Relay Details</h2>
             <div class="credentials">
-                <div class="cred-item">
-                    <div class="cred-label">Proxy Host</div>
-                    <div class="cred-value" id="proxyHost">Loading...</div>
+                <div class="cred-item full-width">
+                    <div class="cred-label">Dashboard URL</div>
+                    <div class="cred-value" id="dashboardUrl">Loading...</div>
                 </div>
-                <div class="cred-item">
-                    <div class="cred-label">Proxy Port</div>
-                    <div class="cred-value" id="proxyPort">Loading...</div>
+                <div class="cred-item full-width">
+                    <div class="cred-label">Relay WebSocket</div>
+                    <div class="cred-value" id="relayWebSocketUrl">Loading...</div>
                 </div>
                 <div class="cred-item">
                     <div class="cred-label">Username</div>
@@ -143,43 +193,75 @@
                 </div>
             </div>
 
-            <h3 style="margin-top: 2rem;">How to test it:</h3>
-            <div class="code-block" id="curlCmd">Loading...</div>
+            <h3>Chrome setup</h3>
+            <ol class="steps">
+                <li>Open <strong>chrome://extensions</strong> and enable Developer mode.</li>
+                <li>Load the unpacked extension from the local <strong>customer-facing/burner-vpn/chrome-extension</strong> folder.</li>
+                <li>Paste the Dashboard URL, Username, and Password shown here into the popup.</li>
+                <li>Click <strong>Attach Current Tab</strong>. The extension reloads the tab and keeps your existing Chrome cookies/session.</li>
+            </ol>
+
+            <h3>Extension config snippet</h3>
+            <div class="code-block" id="setupSnippet">Loading...</div>
+            <p class="note">Current limitation: HTTP and HTTPS page requests are relayed. WebSocket upgrades and large binary uploads are not tunneled yet.</p>
         </div>
 
         <div class="panel stats-panel">
-            <h2 style="margin-bottom: 0;">Live Requests Handled</h2>
-            <p style="color: var(--text-muted); margin-top: 0.5rem;">(Real-time traffic intercept)</p>
-            <div class="stat-number" id="requestCount">0</div>
+            <h2 style="margin-bottom: 0;">Live Relay Stats</h2>
+            <p style="color: var(--text-muted); margin-top: 0.5rem;">(Real-time traffic through the extension relay)</p>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Requests proxied</div>
+                    <div class="stat-number" id="requestCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Bytes relayed</div>
+                    <div class="stat-number small" id="bytesRelayed">0 B</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active extension clients</div>
+                    <div class="stat-number small" id="activeClients">0</div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
+        function relayWebSocketURL(origin, relayPath) {
+            const relayUrl = new URL(relayPath, origin);
+            relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+            return relayUrl.toString();
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
-            // Fetch credentials
             const res = await fetch('/api/credentials');
             const creds = await res.json();
-            
-            // Extract the proxy host from the dashboard URL (removing https://)
-            const proxyHostWithPort = document.getElementById('proxyHost');
-            const curlCmd = document.getElementById('curlCmd');
-            
-            // The user will get the proxy endpoint from the CLI, but we can try to guess the host
-            // Often it's the same domain as the dashboard but on a different port.
-            // Since we exposed the proxy via TCP, we can't fully know the external port here,
-            // so we prompt them to check the CLI output for the exact proxy URL.
-            document.getElementById('proxyHost').textContent = "Check CLI Output";
-            document.getElementById('proxyPort').textContent = "Check CLI Output";
+            const dashboardUrl = window.location.origin;
+            const relayUrl = relayWebSocketURL(dashboardUrl, creds.relayPath);
+
+            document.getElementById('dashboardUrl').textContent = dashboardUrl;
+            document.getElementById('relayWebSocketUrl').textContent = relayUrl;
             document.getElementById('proxyUser').textContent = creds.username;
             document.getElementById('proxyPass').textContent = creds.password;
+            document.getElementById('setupSnippet').textContent = JSON.stringify({
+                dashboardUrl,
+                relayWebSocketUrl: relayUrl,
+                proxyUser: creds.username,
+                proxyPass: creds.password
+            }, null, 2);
 
-            document.getElementById('curlCmd').innerHTML = "curl -x http://" + creds.username + ":" + creds.password + "@<strong>[PROXY_ENDPOINT_FROM_CLI]</strong> https://httpbin.org/ip";
-
-            // Connect to SSE for live stats
             const eventSource = new EventSource('/api/stats/stream');
             eventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                document.getElementById('requestCount').textContent = data.requestsHandled;
+                document.getElementById('requestCount').textContent = data.requestsProxied;
+                document.getElementById('bytesRelayed').textContent = formatBytes(data.bytesRelayed);
+                document.getElementById('activeClients').textContent = data.activeRelayClients;
             };
         });
     </script>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Burner Tab Relay</title>
+  <style>
+    :root {
+      --bg: #10131a;
+      --panel: #171c26;
+      --text: #e5edf7;
+      --muted: #97a6ba;
+      --accent: #22c55e;
+      --accent-soft: rgba(34, 197, 94, 0.14);
+      --border: #2b3444;
+      --danger: #fb7185;
+      --warning: #fbbf24;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      width: 360px;
+    }
+
+    main {
+      padding: 16px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.1rem;
+    }
+
+    .subtitle,
+    .note,
+    .hint,
+    .footnote,
+    .tab-meta {
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .status {
+      margin: 14px 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .status.idle {
+      border-color: var(--border);
+    }
+
+    .status.pending {
+      border-color: rgba(251, 191, 36, 0.45);
+      background: rgba(251, 191, 36, 0.12);
+      color: #fde68a;
+    }
+
+    .status.active {
+      border-color: rgba(34, 197, 94, 0.5);
+      background: var(--accent-soft);
+      color: #bbf7d0;
+    }
+
+    .status.error {
+      border-color: rgba(251, 113, 133, 0.45);
+      background: rgba(251, 113, 133, 0.12);
+      color: #fecdd3;
+    }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 6px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: rgba(34, 197, 94, 0.6);
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 12px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: #052e16;
+    }
+
+    button.secondary {
+      background: #253042;
+      color: var(--text);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Burner Tab Relay</h1>
+    <p class="subtitle">Attach the current tab to the sandbox relay without logging in again.</p>
+
+    <div id="status" class="status idle">Detached. This tab is browsing directly.</div>
+
+    <label for="dashboardUrl">Dashboard URL</label>
+    <input id="dashboardUrl" type="url" placeholder="https://sb-xxxx.sandbox.aerol.cloud">
+
+    <label for="proxyUser">Username</label>
+    <input id="proxyUser" type="text" placeholder="user_abcd1234">
+
+    <label for="proxyPass">Password</label>
+    <input id="proxyPass" type="password" placeholder="Paste the password from the dashboard">
+
+    <p id="relayUrlHint" class="hint">Relay WebSocket: waiting for a valid dashboard URL</p>
+    <p class="note">Attach reloads the current tab so the next page load goes through the sandbox relay. Detach reloads it back to direct browsing.</p>
+
+    <div class="actions">
+      <button id="attachBtn" type="button">Attach Current Tab</button>
+      <button id="detachBtn" type="button" class="secondary">Detach</button>
+    </div>
+
+    <p id="tabMeta" class="tab-meta">Current tab: unavailable</p>
+    <p class="footnote">HTTP/HTTPS requests are relayed. WebSocket upgrades and large binary uploads are not tunneled yet.</p>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

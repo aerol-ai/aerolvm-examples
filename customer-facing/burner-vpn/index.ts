@@ -2,7 +2,6 @@ import { MicroVM } from '@aerol-ai/aerolvm-sdk';
 import * as dotenv from 'dotenv';
 import { writeFile } from 'fs/promises';
 import { setTimeout as delay } from 'timers/promises';
-import { execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
@@ -43,9 +42,21 @@ async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 5): 
   throw lastErr;
 }
 
+function serviceURL(baseUrl: string, relativePath: string) {
+  const normalized = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  return new URL(relativePath, normalized).toString();
+}
+
+function websocketURL(baseUrl: string, relativePath: string) {
+  const relayUrl = new URL(serviceURL(baseUrl, relativePath));
+  relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  return relayUrl.toString();
+}
+
 async function main() {
   const proxyUser = `user_${crypto.randomBytes(4).toString('hex')}`;
   const proxyPass = crypto.randomBytes(8).toString('hex');
+  const extensionPath = path.join(__dirname, 'chrome-extension');
 
   console.log(`[host] Creating MicroVM client with apiUrl=${apiUrl}`);
   const client = new MicroVM({ apiUrl, patToken });
@@ -53,7 +64,6 @@ async function main() {
   console.log(`[host] Creating sandbox with image=${imageName}, cpu=1, memoryMB=1024`);
   console.log(`[host] Env vars being passed to sandbox:`);
   console.log(`[host]   PORT         = 3000`);
-  console.log(`[host]   PROXY_PORT   = 8080`);
   console.log(`[host]   PROXY_USER   = ${proxyUser}`);
   console.log(`[host]   PROXY_PASS   = ***set***`);
 
@@ -64,7 +74,6 @@ async function main() {
     memoryMB: 1024,
     env: {
       PORT: "3000",
-      PROXY_PORT: "8080",
       PROXY_USER: proxyUser,
       PROXY_PASS: proxyPass
     }
@@ -72,51 +81,60 @@ async function main() {
 
   console.log(`[host] ✅ Sandbox created! ID: ${sandbox.id} (took ${Date.now() - createStart}ms)`);
 
-  console.log(`[host] Waiting for Web Dashboard to be ready on port 3000...`);
+  console.log(`[host] Waiting for server to be ready on port 3000...`);
   for (let attempt = 0; attempt < 20; attempt += 1) {
     console.log(`[host]   Health check attempt ${attempt + 1}/20...`);
-    const result = await sandbox.exec({
-      command: 'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000',
-      timeoutSeconds: 5,
-    });
+    try {
+      const result = await sandbox.exec({
+        command: `node -e "const req = require('http').get('http://127.0.0.1:3000', (r) => process.exit(r.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1)); req.setTimeout(2000, () => process.exit(1));"`,
+        timeoutSeconds: 5,
+      });
 
-    console.log(`[host]   exitCode=${result.exitCode}, stdout=${result.stdout}, stderr=${result.stderr?.substring(0, 200)}`);
+      console.log(`[host]   exitCode=${result.exitCode}, stdout=${result.stdout}, stderr=${result.stderr?.substring(0, 200)}`);
 
-    if (result.exitCode === 0) {
-      console.log(`[host] ✅ Web Dashboard is ready!`);
-      break;
+      if (result.exitCode === 0) {
+        console.log(`[host] ✅ Server is ready!`);
+        break;
+      }
+    } catch (err: any) {
+      console.log(`[host]   Exec failed (VM booting?): ${err.message}`);
     }
+    
     if (attempt === 19) {
       console.error(`[host] ❌ Server did not become ready after 20 attempts`);
     }
     await delay(1000);
   }
 
-  console.log(`[host] Exposing ports...`);
-  const dashboardExposure = await withRetry("exposePort(3000)", () => sandbox.exposePort(3000));
-  const proxyExposure = await withRetry("exposePort(8080)", () => sandbox.exposePort(8080, { protocol: "tcp" }));
-  
-  const cleanProxyUrl = proxyExposure.url.replace('tcp://', '');
-  
+  console.log(`[host] Exposing port 3000...`);
+  const exposure = await withRetry("exposePort(3000)", () => sandbox.exposePort(3000));
+  const dashboardUrl = exposure.url;
+  const relayWebSocketUrl = websocketURL(dashboardUrl, '/ws-relay');
+
   console.log(`\n======================================================`);
-  console.log(`[host] 🚀 BURNER VPN IS LIVE!`);
+  console.log(`[host] 🚀 BURNER TAB RELAY IS LIVE!`);
   console.log(`======================================================`);
-  console.log(`[host] Dashboard URL : ${dashboardExposure.url}`);
-  console.log(`[host] Proxy Endpoint: ${cleanProxyUrl}`);
-  console.log(`[host] Username      : ${proxyUser}`);
-  console.log(`[host] Password      : ${proxyPass}`);
-  console.log(`[host] \n(Open the Dashboard URL in your browser to see live traffic!)`);
-  
+  console.log(`[host] Dashboard URL      : ${dashboardUrl}`);
+  console.log(`[host] Relay WebSocket    : ${relayWebSocketUrl}`);
+  console.log(`[host] Username           : ${proxyUser}`);
+  console.log(`[host] Password           : ${proxyPass}`);
+  console.log(`[host] Extension folder   : ${extensionPath}`);
+  console.log(`[host]`);
+  console.log(`[host] Load the unpacked Chrome extension, paste these values, then attach the tab you want to relay.`);
+  console.log(`[host] The extension reloads the tab and keeps your existing Chrome cookies/session.`);
+
   const payload = {
     sandboxID: sandbox.id,
-    dashboardUrl: dashboardExposure.url,
-    proxyEndpoint: cleanProxyUrl,
+    dashboardUrl,
+    relayWebSocketUrl,
     proxyUser,
-    proxyPass
+    proxyPass,
+    chromeExtensionPath: extensionPath
   };
 
-  await writeFile("burner-vpn-deployment.json", `${JSON.stringify(payload, null, 2)}\n`);
-  console.log(`[host] Deployment info written to burner-vpn-deployment.json`);
+  const deploymentPath = path.join(__dirname, 'burner-vpn-deployment.json');
+  await writeFile(deploymentPath, `${JSON.stringify(payload, null, 2)}\n`);
+  console.log(`[host] Deployment info written to ${deploymentPath}`);
 }
 
 main().catch((err) => {
