@@ -11,11 +11,11 @@ async function main() {
   console.log("Initializing AerolVM client...");
   const client = new MicroVM({ apiUrl, patToken });
 
-  console.log("Creating Jupyter sandbox (2 CPU, 4GB RAM)...");
+  console.log("Creating Jupyter sandbox (1 CPU, 2GB RAM)...");
   const sandbox = await client.create({
     image: "python:3.11-bookworm",
-    cpu: 2,
-    memoryMB: 4096,
+    cpu: 1,
+    memoryMB: 2048,
   });
   console.log(`Sandbox created successfully! ID: ${sandbox.id}`);
 
