@@ -11,9 +11,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
-const PORT = process.env.PORT || 3009;
+const PORT = process.env.PORT || 3000;
 
 interface LanguageConfig {
   image: string;
