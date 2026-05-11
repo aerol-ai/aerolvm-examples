@@ -1,0 +1,17 @@
+{
+  "name": "burner-vpn-host",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --loader ts-node/esm index.ts"
+  },
+  "dependencies": {
+    "@aerol-ai/aerolvm-sdk": "^0.1.7",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}

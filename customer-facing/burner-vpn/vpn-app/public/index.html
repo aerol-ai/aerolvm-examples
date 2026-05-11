@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Burner VPN Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0f111a;
+            --panel-bg: #1e2130;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #10b981;
+            --border: #334155;
+            --font-mono: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            color: var(--accent);
+            margin: 0;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .credentials {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .cred-item {
+            background: #161822;
+            padding: 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .cred-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .cred-value {
+            font-family: var(--font-mono);
+            font-size: 1.2rem;
+            color: var(--accent);
+        }
+
+        .code-block {
+            background: #161822;
+            padding: 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            font-family: var(--font-mono);
+            color: var(--text-main);
+            overflow-x: auto;
+            margin-top: 1rem;
+        }
+
+        .stats-panel {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 4rem;
+            font-weight: bold;
+            color: var(--accent);
+            font-family: var(--font-mono);
+        }
+
+        .pulse {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 50%;
+            margin-right: 10px;
+            box-shadow: 0 0 10px var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><span class="pulse"></span>Burner VPN / Proxy</h1>
+            <p style="color: var(--text-muted)">Your isolated, ephemeral proxy server is active.</p>
+        </div>
+
+        <div class="panel">
+            <h2>Connection Details</h2>
+            <div class="credentials">
+                <div class="cred-item">
+                    <div class="cred-label">Proxy Host</div>
+                    <div class="cred-value" id="proxyHost">Loading...</div>
+                </div>
+                <div class="cred-item">
+                    <div class="cred-label">Proxy Port</div>
+                    <div class="cred-value" id="proxyPort">Loading...</div>
+                </div>
+                <div class="cred-item">
+                    <div class="cred-label">Username</div>
+                    <div class="cred-value" id="proxyUser">Loading...</div>
+                </div>
+                <div class="cred-item">
+                    <div class="cred-label">Password</div>
+                    <div class="cred-value" id="proxyPass">Loading...</div>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 2rem;">How to test it:</h3>
+            <div class="code-block" id="curlCmd">Loading...</div>
+        </div>
+
+        <div class="panel stats-panel">
+            <h2 style="margin-bottom: 0;">Live Requests Handled</h2>
+            <p style="color: var(--text-muted); margin-top: 0.5rem;">(Real-time traffic intercept)</p>
+            <div class="stat-number" id="requestCount">0</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Fetch credentials
+            const res = await fetch('/api/credentials');
+            const creds = await res.json();
+            
+            // Extract the proxy host from the dashboard URL (removing https://)
+            const proxyHostWithPort = document.getElementById('proxyHost');
+            const curlCmd = document.getElementById('curlCmd');
+            
+            // The user will get the proxy endpoint from the CLI, but we can try to guess the host
+            // Often it's the same domain as the dashboard but on a different port.
+            // Since we exposed the proxy via TCP, we can't fully know the external port here,
+            // so we prompt them to check the CLI output for the exact proxy URL.
+            document.getElementById('proxyHost').textContent = "Check CLI Output";
+            document.getElementById('proxyPort').textContent = "Check CLI Output";
+            document.getElementById('proxyUser').textContent = creds.username;
+            document.getElementById('proxyPass').textContent = creds.password;
+
+            document.getElementById('curlCmd').innerHTML = "curl -x http://" + creds.username + ":" + creds.password + "@<strong>[PROXY_ENDPOINT_FROM_CLI]</strong> https://httpbin.org/ip";
+
+            // Connect to SSE for live stats
+            const eventSource = new EventSource('/api/stats/stream');
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                document.getElementById('requestCount').textContent = data.requestsHandled;
+            };
+        });
+    </script>
+</body>
+</html>
