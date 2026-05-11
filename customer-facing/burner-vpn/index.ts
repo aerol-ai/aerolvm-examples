@@ -4,7 +4,6 @@ import { writeFile } from 'fs/promises';
 import { setTimeout as delay } from 'timers/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import crypto from 'crypto';
 
 dotenv.config();
 
@@ -42,30 +41,17 @@ async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 5): 
   throw lastErr;
 }
 
-function serviceURL(baseUrl: string, relativePath: string) {
-  const normalized = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  return new URL(relativePath, normalized).toString();
-}
-
-function websocketURL(baseUrl: string, relativePath: string) {
-  const relayUrl = new URL(serviceURL(baseUrl, relativePath));
-  relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-  return relayUrl.toString();
-}
-
 async function main() {
-  const proxyUser = `user_${crypto.randomBytes(4).toString('hex')}`;
-  const proxyPass = crypto.randomBytes(8).toString('hex');
-  const extensionPath = path.join(__dirname, 'chrome-extension');
+  const dashboardPort = 3000;
+  const socksPort = 1080;
 
   console.log(`[host] Creating MicroVM client with apiUrl=${apiUrl}`);
   const client = new MicroVM({ apiUrl, patToken });
 
   console.log(`[host] Creating sandbox with image=${imageName}, cpu=1, memoryMB=1024`);
   console.log(`[host] Env vars being passed to sandbox:`);
-  console.log(`[host]   PORT         = 3000`);
-  console.log(`[host]   PROXY_USER   = ${proxyUser}`);
-  console.log(`[host]   PROXY_PASS   = ***set***`);
+  console.log(`[host]   PORT         = ${dashboardPort}`);
+  console.log(`[host]   SOCKS_PORT   = ${socksPort}`);
 
   const createStart = Date.now();
   const sandbox = await client.create({
@@ -73,20 +59,19 @@ async function main() {
     cpu: 1,
     memoryMB: 1024,
     env: {
-      PORT: "3000",
-      PROXY_USER: proxyUser,
-      PROXY_PASS: proxyPass
+      PORT: String(dashboardPort),
+      SOCKS_PORT: String(socksPort)
     }
   });
 
   console.log(`[host] ✅ Sandbox created! ID: ${sandbox.id} (took ${Date.now() - createStart}ms)`);
 
-  console.log(`[host] Waiting for server to be ready on port 3000...`);
+  console.log(`[host] Waiting for dashboard to be ready on port ${dashboardPort}...`);
   for (let attempt = 0; attempt < 20; attempt += 1) {
     console.log(`[host]   Health check attempt ${attempt + 1}/20...`);
     try {
       const result = await sandbox.exec({
-        command: `node -e "const req = require('http').get('http://127.0.0.1:3000', (r) => process.exit(r.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1)); req.setTimeout(2000, () => process.exit(1));"`,
+        command: `node -e "const req = require('http').get('http://127.0.0.1:${dashboardPort}', (r) => process.exit(r.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1)); req.setTimeout(2000, () => process.exit(1));"`,
         timeoutSeconds: 5,
       });
 
@@ -106,30 +91,52 @@ async function main() {
     await delay(1000);
   }
 
-  console.log(`[host] Exposing port 3000...`);
-  const exposure = await withRetry("exposePort(3000)", () => sandbox.exposePort(3000));
-  const dashboardUrl = exposure.url;
-  const relayWebSocketUrl = websocketURL(dashboardUrl, '/ws-relay');
+  console.log(`[host] Exposing dashboard HTTP port ${dashboardPort}...`);
+  const dashboardExposure = await withRetry(`exposePort(${dashboardPort})`, () => sandbox.exposePort(dashboardPort));
+  console.log(`[host] Exposing SOCKS5 TCP port ${socksPort}...`);
+  const socksExposure = await withRetry(`exposePort(${socksPort}, tcp)`, () =>
+    sandbox.exposePort(socksPort, { protocol: 'tcp' })
+  );
+
+  const dashboardUrl = dashboardExposure.url;
+  const socksUrl = new URL(socksExposure.url);
+  const socksProxyHost = socksUrl.hostname;
+  const socksProxyPort = parseInt(socksUrl.port, 10);
+  const socksProxyEndpoint = `${socksProxyHost}:${socksProxyPort}`;
+  const chromeLaunchCommand = `open -na "Google Chrome" --args --proxy-server="socks5://${socksProxyEndpoint}" --host-resolver-rules="MAP * ~NOTFOUND , EXCLUDE ${socksProxyHost}"`;
+
+  const runtimeConfig = {
+    proxyScheme: 'socks5',
+    authMode: 'none',
+    dashboardUrl,
+    socksProxyEndpoint,
+    socksProxyHost,
+    socksProxyPort,
+    chromeLaunchCommand
+  };
+
+  await sandbox.uploadFile('/app/public/runtime-config.json', `${JSON.stringify(runtimeConfig, null, 2)}\n`);
 
   console.log(`\n======================================================`);
-  console.log(`[host] 🚀 BURNER TAB RELAY IS LIVE!`);
+  console.log(`[host] 🚀 BURNER SOCKS5 VPN IS LIVE!`);
   console.log(`======================================================`);
   console.log(`[host] Dashboard URL      : ${dashboardUrl}`);
-  console.log(`[host] Relay WebSocket    : ${relayWebSocketUrl}`);
-  console.log(`[host] Username           : ${proxyUser}`);
-  console.log(`[host] Password           : ${proxyPass}`);
-  console.log(`[host] Extension folder   : ${extensionPath}`);
+  console.log(`[host] SOCKS5 Endpoint    : ${socksProxyEndpoint}`);
+  console.log(`[host] Auth Mode          : none (Chrome does not support SOCKSv5 auth)`);
   console.log(`[host]`);
-  console.log(`[host] Load the unpacked Chrome extension, paste these values, then attach the tab you want to relay.`);
-  console.log(`[host] The extension reloads the tab and keeps your existing Chrome cookies/session.`);
+  console.log(`[host] Configure Chrome to use a SOCKS5 proxy at ${socksProxyEndpoint}`);
+  console.log(`[host] Recommended macOS launch command:`);
+  console.log(`[host]   ${chromeLaunchCommand}`);
 
   const payload = {
     sandboxID: sandbox.id,
     dashboardUrl,
-    relayWebSocketUrl,
-    proxyUser,
-    proxyPass,
-    chromeExtensionPath: extensionPath
+    proxyScheme: 'socks5',
+    authMode: 'none',
+    socksProxyEndpoint,
+    socksProxyHost,
+    socksProxyPort,
+    chromeLaunchCommand
   };
 
   const deploymentPath = path.join(__dirname, 'burner-vpn-deployment.json');

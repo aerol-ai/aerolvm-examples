@@ -1,8 +1,10 @@
 {
-  "sandboxID": "sb-1a2a69ee4230619a",
-  "dashboardUrl": "https://sb-1a2a69ee4230619a-3000.sandbox.aerol.cloud",
-  "relayWebSocketUrl": "wss://sb-1a2a69ee4230619a-3000.sandbox.aerol.cloud/ws-relay",
-  "proxyUser": "user_e440f84c",
-  "proxyPass": "7f10328779ccae6e",
-  "chromeExtensionPath": "/Users/sumansaurabh/Documents/startup-3/aerovm-examples/customer-facing/burner-vpn/chrome-extension"
+  "sandboxID": "sb-f632973c35c93d91",
+  "dashboardUrl": "https://sb-f632973c35c93d91-3000.sandbox.aerol.cloud",
+  "proxyScheme": "socks5",
+  "authMode": "none",
+  "socksProxyEndpoint": "sandbox.aerol.cloud:22681",
+  "socksProxyHost": "sandbox.aerol.cloud",
+  "socksProxyPort": 22681,
+  "chromeLaunchCommand": "open -na \"Google Chrome\" --args --proxy-server=\"socks5://sandbox.aerol.cloud:22681\" --host-resolver-rules=\"MAP * ~NOTFOUND , EXCLUDE sandbox.aerol.cloud\""
 }

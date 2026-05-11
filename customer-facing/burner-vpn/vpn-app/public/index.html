@@ -168,71 +168,69 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1><span class="pulse"></span>Burner Tab Relay</h1>
-            <p style="color: var(--text-muted)">Reuse your current Chrome session.<br>This relay intercepts tab traffic in a Chrome extension and forwards it through the sandbox over WebSocket.</p>
+            <h1><span class="pulse"></span>Burner SOCKS5 VPN</h1>
+            <p style="color: var(--text-muted)">One sandbox, two services.<br>The dashboard runs over HTTP and the browser traffic goes through a native SOCKS5 proxy exposed over TCP.</p>
         </div>
 
         <div class="panel">
-            <h2>Relay Details</h2>
+            <h2>Proxy Details</h2>
             <div class="credentials">
                 <div class="cred-item full-width">
                     <div class="cred-label">Dashboard URL</div>
                     <div class="cred-value" id="dashboardUrl">Loading...</div>
                 </div>
                 <div class="cred-item full-width">
-                    <div class="cred-label">Relay WebSocket</div>
-                    <div class="cred-value" id="relayWebSocketUrl">Loading...</div>
+                    <div class="cred-label">SOCKS5 Endpoint</div>
+                    <div class="cred-value" id="socksProxyEndpoint">Loading...</div>
                 </div>
                 <div class="cred-item">
-                    <div class="cred-label">Username</div>
-                    <div class="cred-value" id="proxyUser">Loading...</div>
+                    <div class="cred-label">Proxy Scheme</div>
+                    <div class="cred-value" id="proxyScheme">Loading...</div>
                 </div>
                 <div class="cred-item">
-                    <div class="cred-label">Password</div>
-                    <div class="cred-value" id="proxyPass">Loading...</div>
+                    <div class="cred-label">Authentication</div>
+                    <div class="cred-value" id="authMode">Loading...</div>
                 </div>
             </div>
 
             <h3>Chrome setup</h3>
             <ol class="steps">
-                <li>Open <strong>chrome://extensions</strong> and enable Developer mode.</li>
-                <li>Load the unpacked extension from the local <strong>customer-facing/burner-vpn/chrome-extension</strong> folder.</li>
-                <li>Paste the Dashboard URL, Username, and Password shown here into the popup.</li>
-                <li>Click <strong>Attach Current Tab</strong>. The extension reloads the tab and keeps your existing Chrome cookies/session.</li>
+                <li>Set a SOCKS5 proxy in Chrome to the host and port shown above. If you already use a proxy manager, set scheme <strong>socks5</strong>.</li>
+                <li>For a dedicated proxied Chrome on macOS, copy the launch command below and run it in Terminal.</li>
+                <li>Chrome does not support SOCKSv5 authentication, so this demo intentionally runs the SOCKS endpoint without auth.</li>
+                <li>After you are done, close the proxied Chrome window or clear the proxy settings and then destroy the sandbox.</li>
             </ol>
 
-            <h3>Extension config snippet</h3>
-            <div class="code-block" id="setupSnippet">Loading...</div>
-            <p class="note">Current limitation: HTTP and HTTPS page requests are relayed. WebSocket upgrades and large binary uploads are not tunneled yet.</p>
+            <h3>macOS Chrome launch command</h3>
+            <div class="code-block" id="chromeLaunchCommand">Loading...</div>
+            <p class="note">Recommended: keep Chrome using proxy-side DNS by launching it with the host resolver rule shown below. This prevents most local DNS leakage for URL loads.</p>
         </div>
 
         <div class="panel stats-panel">
-            <h2 style="margin-bottom: 0;">Live Relay Stats</h2>
-            <p style="color: var(--text-muted); margin-top: 0.5rem;">(Real-time traffic through the extension relay)</p>
+            <h2 style="margin-bottom: 0;">Live Proxy Stats</h2>
+            <p style="color: var(--text-muted); margin-top: 0.5rem;">(Real-time traffic through the native SOCKS5 proxy)</p>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-label">Requests proxied</div>
-                    <div class="stat-number" id="requestCount">0</div>
+                    <div class="stat-label">Connections accepted</div>
+                    <div class="stat-number" id="connectionsAccepted">0</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Bytes relayed</div>
-                    <div class="stat-number small" id="bytesRelayed">0 B</div>
+                    <div class="stat-label">Active tunnels</div>
+                    <div class="stat-number small" id="activeConnections">0</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Active extension clients</div>
-                    <div class="stat-number small" id="activeClients">0</div>
+                    <div class="stat-label">Bytes uploaded</div>
+                    <div class="stat-number small" id="bytesUploaded">0 B</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Bytes downloaded</div>
+                    <div class="stat-number small" id="bytesDownloaded">0 B</div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        function relayWebSocketURL(origin, relayPath) {
-            const relayUrl = new URL(relayPath, origin);
-            relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-            return relayUrl.toString();
-        }
-
         function formatBytes(bytes) {
             if (bytes < 1024) return `${bytes} B`;
             if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -240,28 +238,23 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
-            const res = await fetch('/api/credentials');
-            const creds = await res.json();
+            const res = await fetch('/api/runtime-config');
+            const runtimeConfig = await res.json();
             const dashboardUrl = window.location.origin;
-            const relayUrl = relayWebSocketURL(dashboardUrl, creds.relayPath);
 
             document.getElementById('dashboardUrl').textContent = dashboardUrl;
-            document.getElementById('relayWebSocketUrl').textContent = relayUrl;
-            document.getElementById('proxyUser').textContent = creds.username;
-            document.getElementById('proxyPass').textContent = creds.password;
-            document.getElementById('setupSnippet').textContent = JSON.stringify({
-                dashboardUrl,
-                relayWebSocketUrl: relayUrl,
-                proxyUser: creds.username,
-                proxyPass: creds.password
-            }, null, 2);
+            document.getElementById('socksProxyEndpoint').textContent = runtimeConfig.socksProxyEndpoint || 'Waiting for runtime-config.json';
+            document.getElementById('proxyScheme').textContent = runtimeConfig.proxyScheme || 'socks5';
+            document.getElementById('authMode').textContent = runtimeConfig.authMode || 'none';
+            document.getElementById('chromeLaunchCommand').textContent = runtimeConfig.chromeLaunchCommand || 'Waiting for runtime-config.json';
 
             const eventSource = new EventSource('/api/stats/stream');
             eventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                document.getElementById('requestCount').textContent = data.requestsProxied;
-                document.getElementById('bytesRelayed').textContent = formatBytes(data.bytesRelayed);
-                document.getElementById('activeClients').textContent = data.activeRelayClients;
+                document.getElementById('connectionsAccepted').textContent = data.connectionsAccepted;
+                document.getElementById('activeConnections').textContent = data.activeConnections;
+                document.getElementById('bytesUploaded').textContent = formatBytes(data.bytesUploaded);
+                document.getElementById('bytesDownloaded').textContent = formatBytes(data.bytesDownloaded);
             };
         });
     </script>

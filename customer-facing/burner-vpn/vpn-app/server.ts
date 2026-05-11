@@ -1,141 +1,77 @@
 import express from 'express';
 import http from 'http';
-import https from 'https';
+import net from 'net';
 import path from 'path';
+import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
-import { WebSocketServer, WebSocket } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const PROXY_USER = process.env.PROXY_USER || 'admin';
-const PROXY_PASS = process.env.PROXY_PASS || 'burner123';
-const RELAY_PATH = '/ws-relay';
-const REQUEST_TIMEOUT_MS = 30_000;
+const SOCKS_PORT = parseInt(process.env.SOCKS_PORT || '1080', 10);
+const RUNTIME_CONFIG_PATH = path.join(__dirname, 'public', 'runtime-config.json');
 
-type RelayHeader = {
-  name: string;
-  value: string;
+type ProxyStats = {
+  connectionsAccepted: number;
+  connectionFailures: number;
+  activeConnections: number;
+  bytesUploaded: number;
+  bytesDownloaded: number;
 };
 
-type RelayStats = {
-  requestsProxied: number;
-  bytesRelayed: number;
-  activeRelayClients: number;
+type RuntimeConfig = {
+  proxyScheme: string;
+  authMode: string;
+  dashboardUrl: string;
+  socksProxyEndpoint: string;
+  socksProxyHost: string;
+  socksProxyPort: number;
+  chromeLaunchCommand: string;
 };
 
-const HOP_BY_HOP_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-]);
+type TunnelState = {
+  client: net.Socket;
+  upstream: net.Socket | null;
+  buffer: Buffer;
+  phase: 'greeting' | 'request' | 'connecting' | 'connected';
+  established: boolean;
+  cleanedUp: boolean;
+};
+
+type ParsedRequest = {
+  bytesConsumed: number;
+  host: string;
+  port: number;
+};
+
+const enum SocksReply {
+  Success = 0x00,
+  GeneralFailure = 0x01,
+  ConnectionNotAllowed = 0x02,
+  NetworkUnreachable = 0x03,
+  HostUnreachable = 0x04,
+  ConnectionRefused = 0x05,
+  CommandNotSupported = 0x07,
+  AddressTypeNotSupported = 0x08,
+}
 
 console.log(`\n========================================`);
 console.log(`[web]   Burner VPN Server`);
 console.log(`[web]   PORT       = ${PORT}`);
-console.log(`[proxy] PROXY_USER = ${PROXY_USER}`);
+console.log(`[socks] SOCKS_PORT = ${SOCKS_PORT}`);
 console.log(`========================================\n`);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function sanitizeRequestHeaders(headers: RelayHeader[]) {
-  const sanitized: Record<string, string> = {};
-  for (const header of headers) {
-    const name = header.name.toLowerCase();
-    if (HOP_BY_HOP_HEADERS.has(name) || name === 'content-length' || name === 'host') {
-      continue;
-    }
-    sanitized[header.name] = header.value;
-  }
-  return sanitized;
-}
-
-function extractRelayHeaders(rawHeaders: string[], bodyLength: number, statusCode: number, method: string) {
-  const headers: RelayHeader[] = [];
-  for (let index = 0; index < rawHeaders.length; index += 2) {
-    const name = rawHeaders[index];
-    const value = rawHeaders[index + 1] ?? '';
-    if (HOP_BY_HOP_HEADERS.has(name.toLowerCase()) || name.toLowerCase() === 'content-length') {
-      continue;
-    }
-    headers.push({ name, value });
-  }
-
-  const canHaveBody = method !== 'HEAD' && statusCode !== 204 && statusCode !== 304 && (statusCode < 100 || statusCode >= 200);
-  if (canHaveBody) {
-    headers.push({ name: 'content-length', value: String(bodyLength) });
-  }
-
-  return headers;
-}
-
-async function relayHTTPRequest(message: {
-  id: string;
-  method: string;
-  url: string;
-  headers: RelayHeader[];
-  bodyBase64?: string;
-}) {
-  const targetUrl = new URL(message.url);
-  const transport = targetUrl.protocol === 'https:' ? https : http;
-  const requestBody = message.bodyBase64 ? Buffer.from(message.bodyBase64, 'base64') : undefined;
-
-  return await new Promise<{
-    status: number;
-    statusText: string;
-    headers: RelayHeader[];
-    body: Buffer;
-  }>((resolve, reject) => {
-    const upstream = transport.request(
-      {
-        protocol: targetUrl.protocol,
-        hostname: targetUrl.hostname,
-        port: targetUrl.port || undefined,
-        path: `${targetUrl.pathname}${targetUrl.search}`,
-        method: message.method,
-        headers: sanitizeRequestHeaders(message.headers),
-      },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on('data', (chunk: Buffer) => chunks.push(chunk));
-        response.on('end', () => {
-          const body = Buffer.concat(chunks);
-          const status = response.statusCode ?? 502;
-          resolve({
-            status,
-            statusText: response.statusMessage ?? 'OK',
-            headers: extractRelayHeaders(response.rawHeaders, body.length, status, message.method),
-            body,
-          });
-        });
-      },
-    );
-
-    upstream.on('error', reject);
-    upstream.setTimeout(REQUEST_TIMEOUT_MS, () => {
-      upstream.destroy(new Error(`Upstream request timed out after ${REQUEST_TIMEOUT_MS}ms`));
-    });
-
-    if (requestBody && requestBody.length > 0) {
-      upstream.write(requestBody);
-    }
-
-    upstream.end();
-  });
-}
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
 
-let stats: RelayStats = { requestsProxied: 0, bytesRelayed: 0, activeRelayClients: 0 };
+let stats: ProxyStats = {
+  connectionsAccepted: 0,
+  connectionFailures: 0,
+  activeConnections: 0,
+  bytesUploaded: 0,
+  bytesDownloaded: 0,
+};
 let sseClients: express.Response[] = [];
 
 function broadcastStats() {
@@ -143,8 +79,263 @@ function broadcastStats() {
   sseClients.forEach((client) => client.write(data));
 }
 
-app.get('/api/credentials', (_req, res) => {
-  res.json({ username: PROXY_USER, password: PROXY_PASS, relayPath: RELAY_PATH });
+async function loadRuntimeConfig() {
+  try {
+    return JSON.parse(await readFile(RUNTIME_CONFIG_PATH, 'utf8')) as RuntimeConfig;
+  } catch {
+    return null;
+  }
+}
+
+function sendReply(socket: net.Socket, reply: SocksReply, port = 0) {
+  const response = Buffer.from([
+    0x05,
+    reply,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    (port >> 8) & 0xff,
+    port & 0xff,
+  ]);
+  socket.write(response);
+}
+
+function parseSocksRequest(buffer: Buffer): ParsedRequest | null {
+  if (buffer.length < 4) {
+    return null;
+  }
+
+  const version = buffer[0];
+  const command = buffer[1];
+  const addressType = buffer[3];
+
+  if (version !== 0x05 || command !== 0x01) {
+    return { bytesConsumed: buffer.length, host: '', port: -1 };
+  }
+
+  if (addressType === 0x01) {
+    if (buffer.length < 10) {
+      return null;
+    }
+
+    const host = `${buffer[4]}.${buffer[5]}.${buffer[6]}.${buffer[7]}`;
+    const port = buffer.readUInt16BE(8);
+    return { bytesConsumed: 10, host, port };
+  }
+
+  if (addressType === 0x03) {
+    if (buffer.length < 5) {
+      return null;
+    }
+
+    const hostLength = buffer[4];
+    const end = 5 + hostLength;
+    if (buffer.length < end + 2) {
+      return null;
+    }
+
+    const host = buffer.subarray(5, end).toString('utf8');
+    const port = buffer.readUInt16BE(end);
+    return { bytesConsumed: end + 2, host, port };
+  }
+
+  if (addressType === 0x04) {
+    if (buffer.length < 22) {
+      return null;
+    }
+
+    const parts: string[] = [];
+    for (let index = 4; index < 20; index += 2) {
+      parts.push(buffer.readUInt16BE(index).toString(16));
+    }
+    const host = parts.join(':');
+    const port = buffer.readUInt16BE(20);
+    return { bytesConsumed: 22, host, port };
+  }
+
+  return { bytesConsumed: buffer.length, host: '', port: -2 };
+}
+
+function mapSocketError(error: NodeJS.ErrnoException | undefined) {
+  switch (error?.code) {
+    case 'ECONNREFUSED':
+      return SocksReply.ConnectionRefused;
+    case 'ENETUNREACH':
+      return SocksReply.NetworkUnreachable;
+    case 'EHOSTUNREACH':
+    case 'ENOTFOUND':
+      return SocksReply.HostUnreachable;
+    case 'EACCES':
+      return SocksReply.ConnectionNotAllowed;
+    default:
+      return SocksReply.GeneralFailure;
+  }
+}
+
+function cleanupTunnel(state: TunnelState) {
+  if (state.cleanedUp) {
+    return;
+  }
+
+  state.cleanedUp = true;
+  if (state.established) {
+    stats.activeConnections = Math.max(0, stats.activeConnections - 1);
+    broadcastStats();
+  }
+
+  if (state.upstream && !state.upstream.destroyed) {
+    state.upstream.destroy();
+  }
+  if (!state.client.destroyed) {
+    state.client.destroy();
+  }
+}
+
+function startTunnel(state: TunnelState, host: string, port: number, initialPayload: Buffer) {
+  state.phase = 'connecting';
+  const upstream = net.createConnection({ host, port });
+  state.upstream = upstream;
+
+  upstream.on('connect', () => {
+    state.phase = 'connected';
+    state.established = true;
+    stats.connectionsAccepted += 1;
+    stats.activeConnections += 1;
+    broadcastStats();
+    sendReply(state.client, SocksReply.Success, upstream.localPort ?? 0);
+
+    if (initialPayload.length > 0) {
+      stats.bytesUploaded += initialPayload.length;
+      broadcastStats();
+      upstream.write(initialPayload);
+    }
+  });
+
+  upstream.on('data', (chunk: Buffer) => {
+    if (!state.client.destroyed) {
+      stats.bytesDownloaded += chunk.length;
+      broadcastStats();
+      state.client.write(chunk);
+    }
+  });
+
+  upstream.on('error', (error: NodeJS.ErrnoException) => {
+    if (!state.established && !state.client.destroyed) {
+      stats.connectionFailures += 1;
+      broadcastStats();
+      sendReply(state.client, mapSocketError(error));
+    }
+    cleanupTunnel(state);
+  });
+
+  upstream.on('close', () => {
+    cleanupTunnel(state);
+  });
+}
+
+function processHandshake(state: TunnelState) {
+  if (state.phase === 'greeting') {
+    if (state.buffer.length < 2) {
+      return;
+    }
+
+    const version = state.buffer[0];
+    const methodCount = state.buffer[1];
+    const totalGreetingBytes = 2 + methodCount;
+    if (state.buffer.length < totalGreetingBytes) {
+      return;
+    }
+
+    if (version !== 0x05) {
+      state.client.destroy();
+      return;
+    }
+
+    const methods = state.buffer.subarray(2, totalGreetingBytes);
+    if (!methods.includes(0x00)) {
+      state.client.write(Buffer.from([0x05, 0xff]));
+      state.client.destroy();
+      return;
+    }
+
+    state.client.write(Buffer.from([0x05, 0x00]));
+    state.buffer = state.buffer.subarray(totalGreetingBytes);
+    state.phase = 'request';
+  }
+
+  if (state.phase !== 'request') {
+    return;
+  }
+
+  const parsedRequest = parseSocksRequest(state.buffer);
+  if (!parsedRequest) {
+    return;
+  }
+
+  if (parsedRequest.port === -1) {
+    sendReply(state.client, SocksReply.CommandNotSupported);
+    state.client.destroy();
+    return;
+  }
+
+  if (parsedRequest.port === -2 || !parsedRequest.host || parsedRequest.port <= 0 || parsedRequest.port > 65535) {
+    sendReply(state.client, SocksReply.AddressTypeNotSupported);
+    state.client.destroy();
+    return;
+  }
+
+  const initialPayload = state.buffer.subarray(parsedRequest.bytesConsumed);
+  state.buffer = Buffer.alloc(0);
+  startTunnel(state, parsedRequest.host, parsedRequest.port, initialPayload);
+}
+
+const socksServer = net.createServer((client) => {
+  const state: TunnelState = {
+    client,
+    upstream: null,
+    buffer: Buffer.alloc(0),
+    phase: 'greeting',
+    established: false,
+    cleanedUp: false,
+  };
+
+  client.on('data', (chunk: Buffer) => {
+    if (state.phase === 'connected') {
+      if (state.upstream && !state.upstream.destroyed) {
+        stats.bytesUploaded += chunk.length;
+        broadcastStats();
+        state.upstream.write(chunk);
+      }
+      return;
+    }
+
+    state.buffer = Buffer.concat([state.buffer, chunk]);
+    processHandshake(state);
+  });
+
+  client.on('error', () => {
+    cleanupTunnel(state);
+  });
+
+  client.on('close', () => {
+    cleanupTunnel(state);
+  });
+});
+
+socksServer.on('error', (error) => {
+  console.error(`[socks] ❌ SOCKS5 server error: ${error.message}`);
+  process.exit(1);
+});
+
+app.get('/api/runtime-config', async (_req, res) => {
+  const runtimeConfig = await loadRuntimeConfig();
+  res.json(runtimeConfig ?? {
+    proxyScheme: 'socks5',
+    authMode: 'none',
+  });
 });
 
 app.get('/api/stats/stream', (req, res) => {
@@ -163,110 +354,10 @@ app.get('/api/stats/stream', (req, res) => {
 
 const server = http.createServer(app);
 
-const wss = new WebSocketServer({ server, path: RELAY_PATH });
-
-wss.on('connection', (ws: WebSocket) => {
-  console.log(`[ws] New WebSocket connection`);
-  let authenticated = false;
-
-  ws.on('message', (raw: Buffer | string) => {
-    let message: unknown;
-    try {
-      message = JSON.parse(typeof raw === 'string' ? raw : raw.toString());
-    } catch {
-      return;
-    }
-
-    if (!isRecord(message)) {
-      return;
-    }
-
-    if (message.type === 'auth') {
-      const expected = `${PROXY_USER}:${PROXY_PASS}`;
-      if (message.token === expected) {
-        authenticated = true;
-        stats.activeRelayClients += 1;
-        broadcastStats();
-        ws.send(JSON.stringify({ type: 'auth_ok' }));
-        console.log(`[ws] Client authenticated`);
-      } else {
-        ws.send(JSON.stringify({ type: 'auth_fail', message: 'Bad username or password' }));
-        console.log(`[ws] ❌ Auth failed`);
-        ws.close();
-      }
-      return;
-    }
-
-    if (message.type === 'ping') {
-      ws.send(JSON.stringify({ type: 'pong' }));
-      return;
-    }
-
-    if (!authenticated) {
-      ws.send(JSON.stringify({ type: 'error', message: 'Not authenticated' }));
-      ws.close();
-      return;
-    }
-
-    if (message.type !== 'http_request') {
-      ws.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
-      return;
-    }
-
-    const id = typeof message.id === 'string' ? message.id : '';
-    const method = typeof message.method === 'string' ? message.method : '';
-    const url = typeof message.url === 'string' ? message.url : '';
-    const headers = Array.isArray(message.headers)
-      ? message.headers.filter(
-          (header): header is RelayHeader => isRecord(header) && typeof header.name === 'string' && typeof header.value === 'string',
-        )
-      : [];
-    const bodyBase64 = typeof message.bodyBase64 === 'string' ? message.bodyBase64 : undefined;
-
-    if (!id || !method || !url) {
-      ws.send(JSON.stringify({ type: 'error', id, message: 'Missing required request fields' }));
-      return;
-    }
-
-    console.log(`[ws] ${method} ${url}`);
-    void relayHTTPRequest({ id, method, url, headers, bodyBase64 })
-      .then((response) => {
-        stats.requestsProxied += 1;
-        stats.bytesRelayed += response.body.length + (bodyBase64 ? Buffer.byteLength(bodyBase64, 'base64') : 0);
-        broadcastStats();
-
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(
-            JSON.stringify({
-              type: 'http_response',
-              id,
-              status: response.status,
-              statusText: response.statusText,
-              headers: response.headers,
-              bodyBase64: response.body.toString('base64'),
-            }),
-          );
-        }
-      })
-      .catch((error) => {
-        const messageText = error instanceof Error ? error.message : String(error);
-        console.log(`[ws] Relay error for ${method} ${url}: ${messageText}`);
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'error', id, message: messageText }));
-        }
-      });
-  });
-
-  ws.on('close', () => {
-    if (authenticated) {
-      stats.activeRelayClients = Math.max(0, stats.activeRelayClients - 1);
-      broadcastStats();
-    }
-    console.log(`[ws] WebSocket disconnected`);
-  });
-});
-
 server.listen(PORT, () => {
   console.log(`[web]   ✅ Dashboard listening on port ${PORT}`);
-  console.log(`[ws]    ✅ WebSocket relay ready at ws://0.0.0.0:${PORT}${RELAY_PATH}`);
+});
+
+socksServer.listen(SOCKS_PORT, '0.0.0.0', () => {
+  console.log(`[socks] ✅ SOCKS5 proxy listening on port ${SOCKS_PORT} (no auth)`);
 });
