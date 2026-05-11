@@ -38,7 +38,7 @@ async function main() {
     cpu: 1,
     memoryMB: 1024,
     env: {
-      SB_PAT_TOKEN: patToken,
+      SB_PAT_TOKEN: patToken!,
       SB_API_URL: apiUrl,
       PORT: "3000"
     }
