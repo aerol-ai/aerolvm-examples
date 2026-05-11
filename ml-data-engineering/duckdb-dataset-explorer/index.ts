@@ -16,11 +16,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from kaggle.api.kaggle_api_extended import KaggleApi
 
 # 1. Download Dataset
-os.environ['KAGGLE_USERNAME'] = os.environ.get('K_USER')
-os.environ['KAGGLE_KEY'] = os.environ.get('K_KEY')
 api = KaggleApi()
 api.authenticate()
-api.dataset_download_files(os.environ.get('K_DATASET'), path='./data', unzip=True)
+api.dataset_download_files(os.environ.get('KAGGLE_DATASET'), path='./data', unzip=True)
 
 # 2. Init DuckDB
 db = duckdb.connect(':memory:')
@@ -58,7 +56,7 @@ async function main() {
     image: "python:3.11-bookworm",
     cpu: 2,
     memoryMB: 4096,
-    env: { K_USER: kaggleUsername, K_KEY: kaggleKey, K_DATASET: kaggleDataset }
+    env: { KAGGLE_USERNAME: kaggleUsername, KAGGLE_KEY: kaggleKey, KAGGLE_DATASET: kaggleDataset }
   });
   console.log(`Sandbox created successfully! ID: ${sandbox.id}`);
 

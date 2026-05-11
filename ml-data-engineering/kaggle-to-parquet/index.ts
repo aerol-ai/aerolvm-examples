@@ -14,14 +14,10 @@ import os
 import polars as pl
 from kaggle.api.kaggle_api_extended import KaggleApi
 
-# Auth Kaggle
-os.environ['KAGGLE_USERNAME'] = os.environ.get('K_USER')
-os.environ['KAGGLE_KEY'] = os.environ.get('K_KEY')
-
 api = KaggleApi()
 api.authenticate()
 
-dataset = os.environ.get('K_DATASET')
+dataset = os.environ.get('KAGGLE_DATASET')
 print(f"Downloading {dataset}...")
 api.dataset_download_files(dataset, path='./data', unzip=True)
 
@@ -34,7 +30,7 @@ input_file = os.path.join('./data', csv_files[0])
 output_file = "processed_data.parquet"
 
 print(f"Processing {input_file} with Polars...")
-df = pl.read_csv(input_file)
+df = pl.read_csv(input_file, infer_schema_length=1000000)
 
 # Perform some basic cleaning/optimization
 df = df.drop_nulls()
@@ -57,9 +53,9 @@ async function main() {
     cpu: 1,
     memoryMB: 2048,
     env: {
-      K_USER: kaggleUsername,
-      K_KEY: kaggleKey,
-      K_DATASET: kaggleDataset,
+      KAGGLE_USERNAME: kaggleUsername,
+      KAGGLE_KEY: kaggleKey,
+      KAGGLE_DATASET: kaggleDataset,
     }
   });
   console.log(`Sandbox created successfully! ID: ${sandbox.id}`);
@@ -80,7 +76,10 @@ async function main() {
   console.log(`ETL Pipeline finished! (exit code: ${result.exitCode}, duration: ${result.durationMS}ms)`);
   
   if (result.exitCode !== 0) {
-    console.error("ETL Failed. Stderr output:");
+    console.error("ETL Failed.");
+    console.error("--- STDOUT ---");
+    console.error(result.stdout);
+    console.error("--- STDERR ---");
     console.error(result.stderr);
     process.exit(1)
   }
