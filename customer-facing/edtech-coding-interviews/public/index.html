@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EdTech Interactive Coding</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="navbar">
+      <div class="logo">🚀 Interactive Python Lesson</div>
+      <button id="runBtn" class="run-button">Run Code</button>
+    </header>
+    
+    <div class="workspace">
+      <!-- Left side: Problem Description & Code Editor -->
+      <div class="panel left-panel">
+        <div class="instructions">
+          <h2>Task 1: Fibonacci Sequence</h2>
+          <p>Write a function <code>fibonacci(n)</code> that returns the first <code>n</code> numbers in the Fibonacci sequence.</p>
+          <p>We've started it for you. Complete the implementation and test it by printing the first 10 numbers.</p>
+        </div>
+        
+        <div class="editor-container">
+          <div class="editor-header">
+            <span class="file-name">main.py</span>
+          </div>
+          <textarea id="codeEditor" spellcheck="false">
+def fibonacci(n):
+    # Your code here
+    pass
+
+# Test your code
+print(fibonacci(10))
+</textarea>
+        </div>
+      </div>
+      
+      <!-- Right side: Terminal Output -->
+      <div class="panel right-panel">
+        <div class="terminal-header">
+          <span class="tab active">Terminal</span>
+          <span id="statusIndicator" class="status idle">Idle</span>
+        </div>
+        <div class="terminal-body" id="terminalOutput">
+          <div class="welcome-msg">Output will appear here...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
