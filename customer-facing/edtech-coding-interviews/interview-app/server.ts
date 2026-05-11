@@ -30,18 +30,18 @@ const LANGUAGES: Record<string, LanguageConfig> = {
   javascript: { image: "node:20-slim", filename: "main.js", command: "node /workspace/main.js" },
   rust: {
     image: "rust:1.75-slim", filename: "main.rs",
-    command: "cd /workspace && rustc main.rs && ./main",
+    command: `export PATH=/usr/local/cargo/bin:${DEFAULT_PATH} CARGO_HOME=/usr/local/cargo RUSTUP_HOME=/usr/local/rustup && cd /workspace && rustc main.rs && ./main`,
     env: { PATH: `/usr/local/cargo/bin:${DEFAULT_PATH}`, CARGO_HOME: "/usr/local/cargo", RUSTUP_HOME: "/usr/local/rustup" },
   },
   go: {
     image: "golang:1.21-alpine", filename: "main.go",
-    command: "cd /workspace && go run main.go",
+    command: `export PATH=/usr/local/go/bin:/go/bin:${DEFAULT_PATH} GOPATH=/go && cd /workspace && go run main.go`,
     env: { PATH: `/usr/local/go/bin:/go/bin:${DEFAULT_PATH}`, GOPATH: "/go" },
   },
   cpp: { image: "gcc:13", filename: "main.cpp", command: "cd /workspace && g++ main.cpp -o main && ./main" },
   java: {
     image: "openjdk:21-slim", filename: "Main.java",
-    command: "cd /workspace && java Main.java",
+    command: `export PATH=/usr/local/openjdk-21/bin:${DEFAULT_PATH} JAVA_HOME=/usr/local/openjdk-21 && cd /workspace && java Main.java`,
     env: { PATH: `/usr/local/openjdk-21/bin:${DEFAULT_PATH}`, JAVA_HOME: "/usr/local/openjdk-21" },
   },
   ruby: { image: "ruby:3.2-slim", filename: "main.rb", command: "ruby /workspace/main.rb" },
