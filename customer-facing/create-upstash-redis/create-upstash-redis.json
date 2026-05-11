@@ -1,0 +1,9 @@
+{
+  "sandboxID": "sb-fe45e94d029a4cfe",
+  "redisSessionID": "ses-aca2691fa40f4cd7",
+  "adminSessionID": "ses-ee2d51519c7de873",
+  "upstashRestUrl": "https://sb-fe45e94d029a4cfe-3000.sandbox.aerol.cloud",
+  "upstashToken": "slkvwieg423rn23r23n32unu23ngu23ng3u2ng",
+  "redisEndpoint": "tcp://sandbox.aerol.cloud:22247",
+  "connectionString": "redis://:password@sandbox.aerol.cloud:22247"
+}
