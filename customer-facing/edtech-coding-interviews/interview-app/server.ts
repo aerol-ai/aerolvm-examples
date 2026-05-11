@@ -36,41 +36,69 @@ const LANGUAGES: Record<string, LanguageConfig> = {
 
 app.post('/execute', async (req, res) => {
   const { code, language } = req.body;
+  const reqId = Date.now().toString(36); // short request ID for correlating logs
+
+  console.log(`\n[${reqId}] ========== POST /execute ==========`);
+  console.log(`[${reqId}] language=${language}, code length=${code?.length ?? 0}`);
 
   if (!code || !language) {
+    console.log(`[${reqId}] ❌ Missing code or language`);
     return res.status(400).json({ error: 'Code and language are required.' });
   }
 
   const langConfig = LANGUAGES[language];
   if (!langConfig) {
+    console.log(`[${reqId}] ❌ Unsupported language: ${language}`);
     return res.status(400).json({ error: `Unsupported language: ${language}` });
   }
+
+  console.log(`[${reqId}] Language config: image=${langConfig.image}, filename=${langConfig.filename}`);
+  console.log(`[${reqId}] Command: ${langConfig.command}`);
 
   const apiUrl = process.env.SB_API_URL ?? "http://127.0.0.1:21212";
   const patToken = process.env.SB_PAT_TOKEN;
 
+  console.log(`[${reqId}] SB_API_URL = ${apiUrl}`);
+  console.log(`[${reqId}] SB_PAT_TOKEN = ${patToken ? '***set***' : '(NOT SET)'}`);
+
   if (!patToken) {
+    console.log(`[${reqId}] ❌ SB_PAT_TOKEN is missing`);
     return res.status(500).json({ error: 'Server misconfiguration: SB_PAT_TOKEN is missing. Are you running this via the host script?' });
   }
 
+  console.log(`[${reqId}] Creating MicroVM client with apiUrl=${apiUrl}`);
   const client = new MicroVM({ apiUrl, patToken });
 
   let sandbox;
   try {
     // 1. Create ephemeral sandbox using the requested language image
+    console.log(`[${reqId}] [step 1/5] Creating ephemeral sandbox with image=${langConfig.image}, cpu=0.5, memoryMB=512...`);
+    const createStart = Date.now();
     sandbox = await client.create({
       image: langConfig.image,
       cpu: 0.5,
       memoryMB: 512,
     });
+    console.log(`[${reqId}] [step 1/5] ✅ Sandbox created! id=${sandbox.id} (took ${Date.now() - createStart}ms)`);
 
     // 2. Upload user code to the correct file
-    await sandbox.uploadFile(`/workspace/${langConfig.filename}`, code);
+    const uploadPath = `/workspace/${langConfig.filename}`;
+    console.log(`[${reqId}] [step 2/5] Uploading code to ${uploadPath} (${code.length} bytes)...`);
+    const uploadStart = Date.now();
+    await sandbox.uploadFile(uploadPath, code);
+    console.log(`[${reqId}] [step 2/5] ✅ Upload done (took ${Date.now() - uploadStart}ms)`);
 
     // 3. Execute code safely
+    console.log(`[${reqId}] [step 3/5] Executing: ${langConfig.command}`);
+    const execStart = Date.now();
     const result = await sandbox.exec(langConfig.command);
+    console.log(`[${reqId}] [step 3/5] ✅ Exec done (took ${Date.now() - execStart}ms)`);
+    console.log(`[${reqId}] [step 3/5]   exitCode=${result.exitCode}, durationMS=${result.durationMS}`);
+    console.log(`[${reqId}] [step 3/5]   stdout=${JSON.stringify(result.stdout?.substring(0, 500))}`);
+    console.log(`[${reqId}] [step 3/5]   stderr=${JSON.stringify(result.stderr?.substring(0, 500))}`);
 
     // 4. Return result
+    console.log(`[${reqId}] [step 4/5] Sending response to client`);
     res.json({
       stdout: result.stdout,
       stderr: result.stderr,
@@ -78,15 +106,31 @@ app.post('/execute', async (req, res) => {
       durationMS: result.durationMS,
     });
   } catch (error: any) {
+    console.error(`[${reqId}] ❌ EXCEPTION in /execute handler:`);
+    console.error(`[${reqId}]   message: ${error.message}`);
+    console.error(`[${reqId}]   stack: ${error.stack}`);
     res.status(500).json({ error: error.message || 'Execution failed.' });
   } finally {
     // 5. Instantly cleanup
     if (sandbox) {
-      await sandbox.destroy().catch(console.error);
+      console.log(`[${reqId}] [step 5/5] Destroying sandbox ${sandbox.id}...`);
+      await sandbox.destroy().catch((err: any) => {
+        console.error(`[${reqId}] [step 5/5] ⚠️ Destroy failed: ${err.message}`);
+      });
+      console.log(`[${reqId}] [step 5/5] ✅ Sandbox destroyed`);
+    } else {
+      console.log(`[${reqId}] [step 5/5] No sandbox to destroy (creation must have failed)`);
     }
+    console.log(`[${reqId}] ========== END /execute ==========\n`);
   }
 });
 
 app.listen(PORT, () => {
+  console.log(`\n========================================`);
   console.log(`Interview App Server listening on port ${PORT}`);
+  console.log(`  __dirname     = ${__dirname}`);
+  console.log(`  static path   = ${path.join(__dirname, '..', 'public')}`);
+  console.log(`  SB_API_URL    = ${process.env.SB_API_URL ?? '(not set, default: http://127.0.0.1:21212)'}`);
+  console.log(`  SB_PAT_TOKEN  = ${process.env.SB_PAT_TOKEN ? '***set***' : '(NOT SET)'}`);
+  console.log(`========================================\n`);
 });
