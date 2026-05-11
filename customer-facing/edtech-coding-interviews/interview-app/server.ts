@@ -19,15 +19,31 @@ interface LanguageConfig {
   image: string;
   filename: string;
   command: string;
+  env?: Record<string, string>;
 }
+
+// Default PATH used by /bin/sh in most images
+const DEFAULT_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 const LANGUAGES: Record<string, LanguageConfig> = {
   python: { image: "python:3.11-slim", filename: "main.py", command: "python3 /workspace/main.py" },
   javascript: { image: "node:20-slim", filename: "main.js", command: "node /workspace/main.js" },
-  rust: { image: "rust:1.75-slim", filename: "main.rs", command: "cd /workspace && rustc main.rs && ./main" },
-  go: { image: "golang:1.21-alpine", filename: "main.go", command: "cd /workspace && go run main.go" },
+  rust: {
+    image: "rust:1.75-slim", filename: "main.rs",
+    command: "cd /workspace && rustc main.rs && ./main",
+    env: { PATH: `/usr/local/cargo/bin:${DEFAULT_PATH}`, CARGO_HOME: "/usr/local/cargo", RUSTUP_HOME: "/usr/local/rustup" },
+  },
+  go: {
+    image: "golang:1.21-alpine", filename: "main.go",
+    command: "cd /workspace && go run main.go",
+    env: { PATH: `/usr/local/go/bin:/go/bin:${DEFAULT_PATH}`, GOPATH: "/go" },
+  },
   cpp: { image: "gcc:13", filename: "main.cpp", command: "cd /workspace && g++ main.cpp -o main && ./main" },
-  java: { image: "openjdk:21-slim", filename: "Main.java", command: "cd /workspace && java Main.java" },
+  java: {
+    image: "openjdk:21-slim", filename: "Main.java",
+    command: "cd /workspace && java Main.java",
+    env: { PATH: `/usr/local/openjdk-21/bin:${DEFAULT_PATH}`, JAVA_HOME: "/usr/local/openjdk-21" },
+  },
   ruby: { image: "ruby:3.2-slim", filename: "main.rb", command: "ruby /workspace/main.rb" },
   php: { image: "php:8.2-cli", filename: "main.php", command: "php /workspace/main.php" },
   bash: { image: "alpine:3.19", filename: "main.sh", command: "sh /workspace/main.sh" },
@@ -54,6 +70,9 @@ app.post('/execute', async (req, res) => {
 
   console.log(`[${reqId}] Language config: image=${langConfig.image}, filename=${langConfig.filename}`);
   console.log(`[${reqId}] Command: ${langConfig.command}`);
+  if (langConfig.env) {
+    console.log(`[${reqId}] Exec env overrides: ${JSON.stringify(langConfig.env)}`);
+  }
 
   const apiUrl = process.env.SB_API_URL ?? "http://127.0.0.1:21212";
   const patToken = process.env.SB_PAT_TOKEN;
@@ -91,7 +110,7 @@ app.post('/execute', async (req, res) => {
     // 3. Execute code safely
     console.log(`[${reqId}] [step 3/5] Executing: ${langConfig.command}`);
     const execStart = Date.now();
-    const result = await sandbox.exec(langConfig.command);
+    const result = await sandbox.exec({ command: langConfig.command, env: langConfig.env });
     console.log(`[${reqId}] [step 3/5] ✅ Exec done (took ${Date.now() - execStart}ms)`);
     console.log(`[${reqId}] [step 3/5]   exitCode=${result.exitCode}, durationMS=${result.durationMS}`);
     console.log(`[${reqId}] [step 3/5]   stdout=${JSON.stringify(result.stdout?.substring(0, 500))}`);
