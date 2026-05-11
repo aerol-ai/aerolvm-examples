@@ -4,7 +4,7 @@ import { MicroVM } from "@aerol-ai/aerolvm-sdk";
 const apiUrl = process.env.SB_API_URL ?? "http://127.0.0.1:21212";
 const patToken = process.env.SB_PAT_TOKEN;
 const kaggleUsername = process.env.KAGGLE_USERNAME;
-const kaggleKey = process.env.KAGGLE_API_TOKEN ;
+const kaggleKey = process.env.KAGGLE_KEY || process.env.KAGGLE_API_TOKEN;
 const kaggleDataset = process.env.KAGGLE_DATASET ?? "mlg-ulb/creditcardfraud";
 
 
@@ -42,7 +42,7 @@ print("Done!")
 
 async function main() {
   if (!patToken || !kaggleUsername || !kaggleKey) {
-    throw new Error("Set SB_PAT_TOKEN, KAGGLE_USERNAME, and KAGGLE_KEY before running.");
+    throw new Error("Set SB_PAT_TOKEN, KAGGLE_USERNAME, and KAGGLE_KEY (or KAGGLE_API_TOKEN) before running.");
   }
   console.log("Initializing AerolVM client...");
   const client = new MicroVM({ apiUrl, patToken });

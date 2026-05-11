@@ -3,7 +3,7 @@ import { MicroVM } from "@aerol-ai/aerolvm-sdk";
 const apiUrl = process.env.SB_API_URL ?? "http://127.0.0.1:21212";
 const patToken = process.env.SB_PAT_TOKEN;
 const kaggleUsername = process.env.KAGGLE_USERNAME;
-const kaggleKey = process.env.KAGGLE_KEY;
+const kaggleKey = process.env.KAGGLE_KEY || process.env.KAGGLE_API_TOKEN;
 const kaggleDataset = process.env.KAGGLE_DATASET ?? "dgomonov/new-york-city-airbnb-open-data";
 
 
@@ -47,7 +47,7 @@ ThreadingHTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
 
 async function main() {
   if (!patToken || !kaggleUsername || !kaggleKey) {
-    throw new Error("Set SB_PAT_TOKEN, KAGGLE_USERNAME, and KAGGLE_KEY.");
+    throw new Error("Set SB_PAT_TOKEN, KAGGLE_USERNAME, and KAGGLE_KEY (or KAGGLE_API_TOKEN).");
   }
   console.log("Initializing AerolVM client...");
   const client = new MicroVM({ apiUrl, patToken });
