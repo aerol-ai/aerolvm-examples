@@ -1,0 +1,22 @@
+{
+  "name": "secure-burner-browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc --noEmitOnError --target es2023 --module node16 --moduleResolution node16 --esModuleInterop --skipLibCheck --outDir dist index.ts",
+    "start": "node dist/index.js",
+    "dev": "node --loader ts-node/esm index.ts"
+  },
+  "dependencies": {
+    "@aerol-ai/aerolvm-sdk": "^0.1.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}
