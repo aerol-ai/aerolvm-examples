@@ -1,0 +1,100 @@
+import { writeFile } from "node:fs/promises";
+import { MicroVM } from "@aerol-ai/aerolvm-sdk";
+
+const apiUrl = process.env.SB_API_URL ?? "http://127.0.0.1:21212";
+const patToken = process.env.SB_PAT_TOKEN;
+const kaggleUsername = process.env.KAGGLE_USERNAME;
+const kaggleKey = process.env.KAGGLE_API_TOKEN ;
+const kaggleDataset = process.env.KAGGLE_DATASET ?? "mlg-ulb/creditcardfraud";
+
+
+
+const processingScript = `
+import os
+import polars as pl
+from kaggle.api.kaggle_api_extended import KaggleApi
+
+# Auth Kaggle
+os.environ['KAGGLE_USERNAME'] = os.environ.get('K_USER')
+os.environ['KAGGLE_KEY'] = os.environ.get('K_KEY')
+
+api = KaggleApi()
+api.authenticate()
+
+dataset = os.environ.get('K_DATASET')
+print(f"Downloading {dataset}...")
+api.dataset_download_files(dataset, path='./data', unzip=True)
+
+# Find the CSV file
+csv_files = [f for f in os.listdir('./data') if f.endswith('.csv')]
+if not csv_files:
+    raise Exception("No CSV file found in dataset")
+
+input_file = os.path.join('./data', csv_files[0])
+output_file = "processed_data.parquet"
+
+print(f"Processing {input_file} with Polars...")
+df = pl.read_csv(input_file)
+
+# Perform some basic cleaning/optimization
+df = df.drop_nulls()
+
+print(f"Saving to {output_file}...")
+df.write_parquet(output_file)
+print("Done!")
+`;
+
+async function main() {
+  if (!patToken || !kaggleUsername || !kaggleKey) {
+    throw new Error("Set SB_PAT_TOKEN, KAGGLE_USERNAME, and KAGGLE_KEY before running.");
+  }
+  console.log("Initializing AerolVM client...");
+  const client = new MicroVM({ apiUrl, patToken });
+
+  console.log("Creating ETL sandbox (1 CPU, 2GB RAM)...");
+  const sandbox = await client.create({
+    image: "python:3.11-bookworm",
+    cpu: 1,
+    memoryMB: 2048,
+    env: {
+      K_USER: kaggleUsername,
+      K_KEY: kaggleKey,
+      K_DATASET: kaggleDataset,
+    }
+  });
+  console.log(`Sandbox created successfully! ID: ${sandbox.id}`);
+
+  console.log("Installing dependencies (polars, kaggle)...");
+  const installRes = await sandbox.exec("pip install polars kaggle");
+  console.log(`Dependencies installed (exit code: ${installRes.exitCode}, duration: ${installRes.durationMS}ms)`);
+
+  console.log("Preparing ETL directory...");
+  await sandbox.exec("mkdir -p /etl");
+
+  console.log("Uploading processing script...");
+  await sandbox.uploadFile("/etl/process.py", processingScript);
+  console.log("Script uploaded to /etl/process.py");
+
+  console.log("Running ETL pipeline (this downloads and processes data)...");
+  const result = await sandbox.exec({ command: "python3 /etl/process.py", workDir: "/etl" });
+  console.log(`ETL Pipeline finished! (exit code: ${result.exitCode}, duration: ${result.durationMS}ms)`);
+  
+  if (result.exitCode !== 0) {
+    console.error("ETL Failed. Stderr output:");
+    console.error(result.stderr);
+    process.exit(1)
+  }
+
+  console.log("ETL Complete. Downloading optimized Parquet file to local machine...");
+  const parquetData = await sandbox.downloadFile("/etl/processed_data.parquet");
+  console.log(`Downloaded ${parquetData.byteLength} bytes.`);
+  
+  await writeFile("processed_data.parquet", Buffer.from(parquetData));
+  console.log("Success! File saved to disk as processed_data.parquet");
+  
+  console.log("Cleaning up: Destroying sandbox...");
+  await sandbox.destroy();
+  console.log("Sandbox destroyed.");
+}
+
+main().catch(console.error);
