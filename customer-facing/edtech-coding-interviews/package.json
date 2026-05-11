@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node --loader ts-node/esm index.ts"
+    "dev": "node --loader ts-node/esm index.ts"
   },
   "dependencies": {
+    "@aerol-ai/aerolvm-sdk": "^0.1.7",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {

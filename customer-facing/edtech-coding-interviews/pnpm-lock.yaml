@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@aerol-ai/aerolvm-sdk':
+        specifier: ^0.1.7
+        version: 0.1.7
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
@@ -23,6 +26,9 @@ importers:
         version: 5.9.3
 
 packages:
+
+  '@aerol-ai/aerolvm-sdk@0.1.7':
+    resolution: {integrity: sha512-pAG2droClCDjgRre0C107RHHCAU3VhFbhVhlsGAcPc0JSBBTKwUSA2DvjXASWRYUszt+CgF6K5pvbk+vYlOQSw==}
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -109,6 +115,8 @@ packages:
     engines: {node: '>=6'}
 
 snapshots:
+
+  '@aerol-ai/aerolvm-sdk@0.1.7': {}
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
