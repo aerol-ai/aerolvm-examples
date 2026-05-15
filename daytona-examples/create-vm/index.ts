@@ -1,11 +1,11 @@
-import { Daytona } from '@daytonaio/sdk'
+import { Daytona } from '@daytona/sdk'
 
 // Initialize with configuration
 const daytona = new Daytona({
-  apiKey: 'slkvwieg423rn23r23n32unu23ngu23ng3u2ng',
-  apiUrl: 'https://sandbox.aerol.cloud/daytona',
-  target: 'us',
-})
+    apiKey: 'slkvwieg423rn23r23n32unu23ngu23ng3u2ng',
+    apiUrl: 'https://sandbox.aerol.cloud/daytona',
+    target: 'us',
+  })
 
 const sandbox = await daytona.create({
   snapshot: 'sumanrocs/penify-agent-with-docker:main-b249e3d',

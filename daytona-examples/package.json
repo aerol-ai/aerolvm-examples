@@ -1,5 +1,5 @@
 {
-  "name": "hypcreate-vm",
+  "name": "daytona-examples",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,11 @@
   "scripts": {
     "build": "tsc --noEmitOnError --target es2023 --module node16 --moduleResolution node16 --esModuleInterop --skipLibCheck --outDir dist index.ts",
     "start": "node dist/index.js",
-    "dev": "node --loader ts-node/esm create-vm.ts"
+    "create-vm": "node --loader ts-node/esm create-vm/index.ts",
+    "exec-command": "node --loader ts-node/esm exec-command/index.ts"
   },
   "dependencies": {
-    "@daytonaio/sdk": "0.112.2"
+    "@daytona/sdk": "0.175.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
